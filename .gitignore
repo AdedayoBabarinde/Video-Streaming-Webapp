@@ -1,5 +1,67 @@
-.env
-.env.example
-readme.md
+# Dependencies
 node_modules/
+
+# Build output
 dist/
+build/
+
+# Environment files (contain secrets)
+.env
+.env.local
+.env.*.local
+
+# Terraform
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+tfplan
+*.tfplan
+crash.log
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+nul
+
+# Logs
+*.log
+npm-debug.log*
+
+# Coverage
+coverage/
+
+# Secrets files
+scripts/.env.secrets
+*.secrets
+
+# Misc
+*.pem
+*.key
+
+
+
+.github
+github
+.github/workflows/ci.yml
+.github/workflows/deploy-dev.yml
+k8s
+app
+docs
+trivy.yaml
+.trivyignore
+sonar-project.properties
+environment/prod
+k8s/base/secret.yml
+k8s/prod
+k8s/monitoring
+
+# scripts
+scripts
