@@ -78,7 +78,8 @@ module "aks" {
   max_count           = var.node_count * 3
 
   # AcrPull role assignment via managed identity
-  acr_id = module.acr.acr_id
+  attach_acr = true
+  acr_id     = module.acr.acr_id
 
   
   create_log_analytics = true
