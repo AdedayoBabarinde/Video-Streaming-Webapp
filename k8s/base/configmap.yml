@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: netflix-app-config
+  labels:
+    app: netflix-web
+data:
+  NGINX_PORT: "80"
+  APP_NAME: "Netflix Streaming App"
