@@ -21,7 +21,7 @@ variable "dns_prefix" {
 variable "kubernetes_version" {
   description = "Kubernetes version for the AKS cluster"
   type        = string
-  default     = "1.29"
+  default     = "1.33"
 }
 
 variable "node_count" {
@@ -60,8 +60,14 @@ variable "max_count" {
   default     = 3
 }
 
+variable "attach_acr" {
+  description = "Whether to create an AcrPull role assignment for this cluster"
+  type        = bool
+  default     = false
+}
+
 variable "acr_id" {
-  description = "ID of the ACR to grant pull access to (empty string to skip)"
+  description = "ID of the ACR to grant pull access to (required when attach_acr = true)"
   type        = string
   default     = ""
 }
