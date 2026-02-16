@@ -1,0 +1,97 @@
+name: Deploy Monitoring Stack
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+
+env:
+  AKS_CLUSTER_NAME_DEV: netflix-app-dev-aks
+  AKS_RESOURCE_GROUP_DEV: netflix-app-dev-rg
+  AKS_CLUSTER_NAME_PROD: netflix-app-prod-aks
+  AKS_RESOURCE_GROUP_PROD: netflix-app-prod-rg
+  MONITORING_NAMESPACE: monitoring
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-monitoring:
+    name: Deploy Prometheus + Grafana
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set cluster variables
+        id: cluster
+        run: |
+          if [ "${{ inputs.environment }}" = "prod" ]; then
+            echo "cluster_name=${{ env.AKS_CLUSTER_NAME_PROD }}" >> $GITHUB_OUTPUT
+            echo "resource_group=${{ env.AKS_RESOURCE_GROUP_PROD }}" >> $GITHUB_OUTPUT
+          else
+            echo "cluster_name=${{ env.AKS_CLUSTER_NAME_DEV }}" >> $GITHUB_OUTPUT
+            echo "resource_group=${{ env.AKS_RESOURCE_GROUP_DEV }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ steps.cluster.outputs.resource_group }} \
+            --name ${{ steps.cluster.outputs.cluster_name }} \
+            --overwrite-existing
+
+      - name: Create monitoring namespace
+        run: |
+          kubectl create namespace ${{ env.MONITORING_NAMESPACE }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create Grafana admin secret
+        run: |
+          kubectl create secret generic grafana-secrets \
+            --namespace=${{ env.MONITORING_NAMESPACE }} \
+            --from-literal=admin-password=${{ secrets.GRAFANA_ADMIN_PASSWORD }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy Prometheus
+        run: |
+          kubectl apply -f k8s/monitoring/prometheus-config.yml
+          kubectl apply -f k8s/monitoring/prometheus-deployment.yml
+
+      - name: Deploy Alertmanager
+        run: |
+          kubectl apply -f k8s/monitoring/alertmanager.yml
+
+      - name: Deploy Grafana
+        run: |
+          kubectl apply -f k8s/monitoring/grafana-deployment.yml
+
+      - name: Wait for rollouts
+        run: |
+          kubectl rollout status deployment/prometheus -n ${{ env.MONITORING_NAMESPACE }} --timeout=120s
+          kubectl rollout status deployment/alertmanager -n ${{ env.MONITORING_NAMESPACE }} --timeout=120s
+          kubectl rollout status deployment/grafana -n ${{ env.MONITORING_NAMESPACE }} --timeout=120s
+
+      - name: Display monitoring endpoints
+        run: |
+          echo "=== Monitoring Stack Status ==="
+          kubectl get pods -n ${{ env.MONITORING_NAMESPACE }}
+          echo ""
+          echo "=== Services ==="
+          kubectl get svc -n ${{ env.MONITORING_NAMESPACE }}
+          echo ""
+          echo "Grafana can be accessed via the LoadBalancer IP on port 3000"
+          echo "Default credentials: admin / (your configured password)"
