@@ -1,0 +1,27 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: netflix-web-pdb
+  namespace: netflix-prod
+  labels:
+    app: netflix-web
+    environment: prod
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: netflix-web
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: netflix-api-pdb
+  namespace: netflix-prod
+  labels:
+    app: netflix-api
+    environment: prod
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: netflix-api

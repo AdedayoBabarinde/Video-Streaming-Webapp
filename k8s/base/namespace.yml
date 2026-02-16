@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: netflix-dev
+  labels:
+    app: netflix-streaming
+    environment: dev
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: netflix-prod
+  labels:
+    app: netflix-streaming
+    environment: prod
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    app: monitoring
