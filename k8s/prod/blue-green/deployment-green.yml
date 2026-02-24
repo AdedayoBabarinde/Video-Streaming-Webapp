@@ -1,16 +1,22 @@
+# ============================================================
+# Green slot — production
+# Deploy here when green is inactive; switch traffic when ready.
+# ============================================================
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: netflix-web
+  name: netflix-web-green
   namespace: netflix-prod
   labels:
     app: netflix-web
+    slot: green
     environment: prod
 spec:
   replicas: 3
   selector:
     matchLabels:
       app: netflix-web
+      slot: green
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -20,6 +26,7 @@ spec:
     metadata:
       labels:
         app: netflix-web
+        slot: green
         environment: prod
     spec:
       containers:
@@ -68,20 +75,23 @@ spec:
           labelSelector:
             matchLabels:
               app: netflix-web
+              slot: green
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: netflix-api
+  name: netflix-api-green
   namespace: netflix-prod
   labels:
     app: netflix-api
+    slot: green
     environment: prod
 spec:
   replicas: 2
   selector:
     matchLabels:
       app: netflix-api
+      slot: green
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -91,6 +101,7 @@ spec:
     metadata:
       labels:
         app: netflix-api
+        slot: green
         environment: prod
     spec:
       containers:

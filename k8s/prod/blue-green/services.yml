@@ -1,0 +1,49 @@
+# ============================================================
+# Blue/Green Services — traffic is routed to whichever slot
+# is active.  The workflow patches the selector on switch.
+#
+# Active slot label is managed by the blue-green-deploy workflow.
+# Initial active slot: blue
+# ============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: netflix-web-service
+  namespace: netflix-prod
+  labels:
+    app: netflix-web
+    environment: prod
+  annotations:
+    # Tracks the currently active slot (blue or green)
+    blue-green/active-slot: "blue"
+spec:
+  selector:
+    app: netflix-web
+    slot: blue        # ← patched by the workflow on slot switch
+  type: ClusterIP
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+      name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: netflix-api-service
+  namespace: netflix-prod
+  labels:
+    app: netflix-api
+    environment: prod
+  annotations:
+    blue-green/active-slot: "blue"
+spec:
+  selector:
+    app: netflix-api
+    slot: blue        # ← patched by the workflow on slot switch
+  type: ClusterIP
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+      name: http

@@ -1,16 +1,22 @@
+# ============================================================
+# Blue slot — production
+# Deploy here when blue is inactive; switch traffic when ready.
+# ============================================================
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: netflix-web
+  name: netflix-web-blue
   namespace: netflix-prod
   labels:
     app: netflix-web
+    slot: blue
     environment: prod
 spec:
   replicas: 3
   selector:
     matchLabels:
       app: netflix-web
+      slot: blue
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -20,6 +26,7 @@ spec:
     metadata:
       labels:
         app: netflix-web
+        slot: blue
         environment: prod
     spec:
       containers:
@@ -68,20 +75,23 @@ spec:
           labelSelector:
             matchLabels:
               app: netflix-web
+              slot: blue
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: netflix-api
+  name: netflix-api-blue
   namespace: netflix-prod
   labels:
     app: netflix-api
+    slot: blue
     environment: prod
 spec:
   replicas: 2
   selector:
     matchLabels:
       app: netflix-api
+      slot: blue
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -91,6 +101,7 @@ spec:
     metadata:
       labels:
         app: netflix-api
+        slot: blue
         environment: prod
     spec:
       containers:

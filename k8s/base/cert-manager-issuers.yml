@@ -1,0 +1,42 @@
+# ============================================================
+# cert-manager ClusterIssuers — Let's Encrypt ACME HTTP-01
+#
+# Apply after cert-manager is installed:
+#   helm upgrade --install cert-manager jetstack/cert-manager \
+#     --namespace cert-manager --create-namespace \
+#     --set installCRDs=true
+#
+# Then: kubectl apply -f k8s/base/cert-manager-issuers.yml
+# ============================================================
+
+# Staging issuer — use during testing (not rate-limited, untrusted cert)
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: admin@adedayo.shop
+    privateKeySecretRef:
+      name: letsencrypt-staging-key
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: nginx
+---
+# Production issuer — trusted certificates (rate limited: 5 certs/week per domain)
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@adedayo.shop
+    privateKeySecretRef:
+      name: letsencrypt-prod-key
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: nginx

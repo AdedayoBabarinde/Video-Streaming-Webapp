@@ -26,30 +26,48 @@ data:
         static_configs:
           - targets: ["localhost:9090"]
 
-      # Kubernetes API server
-      - job_name: "kubernetes-apiservers"
-        kubernetes_sd_configs:
-          - role: endpoints
+      # Kubelet cAdvisor metrics (container_* metrics)
+      - job_name: "kubernetes-cadvisor"
         scheme: https
         tls_config:
           ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
-        relabel_configs:
-          - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
-            action: keep
-            regex: default;kubernetes;https
-
-      # Kubernetes nodes
-      - job_name: "kubernetes-nodes"
-        scheme: https
-        tls_config:
-          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          insecure_skip_verify: true
         bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
         kubernetes_sd_configs:
           - role: node
         relabel_configs:
           - action: labelmap
             regex: __meta_kubernetes_node_label_(.+)
+          - target_label: __address__
+            replacement: kubernetes.default.svc:443
+          - source_labels: [__meta_kubernetes_node_name]
+            regex: (.+)
+            target_label: __metrics_path__
+            replacement: /api/v1/nodes/$1/proxy/metrics/cadvisor
+
+      # Kubelet metrics (node-level)
+      - job_name: "kubernetes-nodes"
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          insecure_skip_verify: true
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+          - target_label: __address__
+            replacement: kubernetes.default.svc:443
+          - source_labels: [__meta_kubernetes_node_name]
+            regex: (.+)
+            target_label: __metrics_path__
+            replacement: /api/v1/nodes/$1/proxy/metrics
+
+      # Kube-state-metrics
+      - job_name: "kube-state-metrics"
+        static_configs:
+          - targets: ["kube-state-metrics:8080"]
 
       # Kubernetes pods with prometheus.io annotations
       - job_name: "kubernetes-pods"
@@ -77,36 +95,12 @@ data:
             action: replace
             target_label: kubernetes_pod_name
 
-      # Netflix app services (dev)
-      - job_name: "netflix-dev"
-        kubernetes_sd_configs:
-          - role: endpoints
-            namespaces:
-              names:
-                - netflix-dev
-        relabel_configs:
-          - source_labels: [__meta_kubernetes_service_label_app]
-            action: keep
-            regex: netflix-.*
-
-      # Netflix app services (prod)
-      - job_name: "netflix-prod"
-        kubernetes_sd_configs:
-          - role: endpoints
-            namespaces:
-              names:
-                - netflix-prod
-        relabel_configs:
-          - source_labels: [__meta_kubernetes_service_label_app]
-            action: keep
-            regex: netflix-.*
-
   alert-rules.yml: |
     groups:
       - name: netflix-app-alerts
         rules:
           - alert: HighPodCPU
-            expr: rate(container_cpu_usage_seconds_total{namespace=~"netflix-.*"}[5m]) > 0.8
+            expr: rate(container_cpu_usage_seconds_total{namespace=~"netflix-.*", container!=""}[5m]) > 0.8
             for: 5m
             labels:
               severity: warning
@@ -115,7 +109,7 @@ data:
               description: "Pod {{ $labels.pod }} in {{ $labels.namespace }} has CPU usage above 80% for 5 minutes."
 
           - alert: HighPodMemory
-            expr: container_memory_usage_bytes{namespace=~"netflix-.*"} / container_memory_limit_bytes{namespace=~"netflix-.*"} > 0.85
+            expr: container_memory_usage_bytes{namespace=~"netflix-.*", container!=""} / container_spec_memory_limit_bytes{namespace=~"netflix-.*", container!=""} > 0.85
             for: 5m
             labels:
               severity: warning
@@ -139,12 +133,3 @@ data:
             annotations:
               summary: "Deployment replicas mismatch"
               description: "Deployment {{ $labels.deployment }} in {{ $labels.namespace }} has mismatched replicas for 10 minutes."
-
-          - alert: HighHTTPErrorRate
-            expr: rate(nginx_http_requests_total{status=~"5.."}[5m]) / rate(nginx_http_requests_total[5m]) > 0.05
-            for: 5m
-            labels:
-              severity: critical
-            annotations:
-              summary: "High HTTP 5xx error rate"
-              description: "More than 5% of requests are returning 5xx errors."

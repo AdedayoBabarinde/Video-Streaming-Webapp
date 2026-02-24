@@ -21,10 +21,6 @@ spec:
       labels:
         app: netflix-web
         environment: dev
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "8080"
-        prometheus.io/path: "/health"
     spec:
       containers:
         - name: netflix-web
