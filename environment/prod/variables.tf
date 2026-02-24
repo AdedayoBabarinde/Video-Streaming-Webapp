@@ -41,13 +41,13 @@ variable "key_vault_name" {
 variable "vnet_name" {
   description = "Name of the Virtual Network"
   type        = string
-  default     = "netflix-dev-vnet"
+  default     = "netflix-prod-vnet"
 }
 
 variable "vnet_address_space" {
   description = "Address space for the VNet"
   type        = string
-  default     = "10.0.0.0/16"
+  default     = "10.1.0.0/16"
 }
 
 # -------------------------------------------------------
@@ -83,7 +83,7 @@ variable "system_max_count" {
 variable "app_node_count" {
   description = "Initial node count for the app node pool"
   type        = number
-  default     = 1
+  default     = 2
 }
 
 variable "app_node_vm_size" {
@@ -95,11 +95,11 @@ variable "app_node_vm_size" {
 variable "app_min_count" {
   description = "Minimum node count for app pool autoscaling"
   type        = number
-  default     = 1
+  default     = 2
 }
 
 variable "app_max_count" {
   description = "Maximum node count for app pool autoscaling"
   type        = number
-  default     = 5
+  default     = 6
 }
