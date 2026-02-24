@@ -24,17 +24,19 @@ permissions:
 
 jobs:
   deploy-monitoring:
-    name: Deploy Prometheus + Grafana
+    name: Deploy kube-prometheus-stack via Helm
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Azure Login
+      - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Set cluster variables
         id: cluster
@@ -54,36 +56,41 @@ jobs:
             --name ${{ steps.cluster.outputs.cluster_name }} \
             --overwrite-existing
 
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
       - name: Create monitoring namespace
         run: |
           kubectl create namespace ${{ env.MONITORING_NAMESPACE }} \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Create Grafana admin secret
+      - name: Add Prometheus Community Helm repo
         run: |
-          kubectl create secret generic grafana-secrets \
-            --namespace=${{ env.MONITORING_NAMESPACE }} \
-            --from-literal=admin-password=${{ secrets.GRAFANA_ADMIN_PASSWORD }} \
-            --dry-run=client -o yaml | kubectl apply -f -
+          helm repo add prometheus-community \
+            https://prometheus-community.github.io/helm-charts
+          helm repo update
 
-      - name: Deploy Prometheus
+      - name: Deploy kube-prometheus-stack
         run: |
-          kubectl apply -f k8s/monitoring/prometheus-config.yml
-          kubectl apply -f k8s/monitoring/prometheus-deployment.yml
+          helm upgrade --install kube-prometheus-stack \
+            prometheus-community/kube-prometheus-stack \
+            --namespace ${{ env.MONITORING_NAMESPACE }} \
+            --values k8s/monitoring/helm-values.yml \
+            --set grafana.adminPassword=${{ secrets.GRAFANA_ADMIN_PASSWORD }} \
+            --atomic \
+            --timeout 10m \
+            --cleanup-on-fail
 
-      - name: Deploy Alertmanager
+      - name: Deploy Netflix custom dashboard ConfigMap
         run: |
-          kubectl apply -f k8s/monitoring/alertmanager.yml
-
-      - name: Deploy Grafana
-        run: |
-          kubectl apply -f k8s/monitoring/grafana-deployment.yml
+          kubectl apply -f k8s/monitoring/netflix-dashboard-cm.yml
 
       - name: Wait for rollouts
         run: |
-          kubectl rollout status deployment/prometheus -n ${{ env.MONITORING_NAMESPACE }} --timeout=120s
-          kubectl rollout status deployment/alertmanager -n ${{ env.MONITORING_NAMESPACE }} --timeout=120s
-          kubectl rollout status deployment/grafana -n ${{ env.MONITORING_NAMESPACE }} --timeout=120s
+          kubectl rollout status deployment/kube-prometheus-stack-grafana \
+            -n ${{ env.MONITORING_NAMESPACE }} --timeout=300s
+          kubectl rollout status statefulset/prometheus-kube-prometheus-stack-prometheus \
+            -n ${{ env.MONITORING_NAMESPACE }} --timeout=300s
 
       - name: Display monitoring endpoints
         run: |
@@ -93,5 +100,8 @@ jobs:
           echo "=== Services ==="
           kubectl get svc -n ${{ env.MONITORING_NAMESPACE }}
           echo ""
-          echo "Grafana can be accessed via the LoadBalancer IP on port 3000"
-          echo "Default credentials: admin / (your configured password)"
+          GRAFANA_IP=$(kubectl get svc kube-prometheus-stack-grafana \
+            -n ${{ env.MONITORING_NAMESPACE }} \
+            -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "pending")
+          echo "Grafana: http://${GRAFANA_IP} (admin / your configured password)"
+          echo "Login, then navigate to: Dashboards → Netflix Streaming App"
