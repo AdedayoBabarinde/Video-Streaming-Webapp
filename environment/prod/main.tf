@@ -1,22 +1,23 @@
 # ============================================================
-#  main.tf — Dev Environment
+#  main.tf — Production Environment
 # ============================================================
 
 terraform {
   required_version = ">= 1.5.0"
+
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
       version = "~> 4.0"
     }
   }
+
   backend "azurerm" {
     resource_group_name  = "terraform-state-rg"
-    storage_account_name = "tfstatenetflixdev"
+    storage_account_name = "tfstatenetflixprod"
     container_name       = "tfstate"
-    key                  = "dev.terraform.tfstate"
-    # Use managed identity for state access instead of storage keys
-    use_azuread_auth = true
+    key                  = "prod.terraform.tfstate"
+    use_azuread_auth     = true
   }
 }
 
@@ -67,7 +68,7 @@ module "acr" {
   acr_name            = var.acr_name
   resource_group_name = module.resource_group.resource_group_name
   location            = module.resource_group.location
-  sku                 = "Basic"
+  sku                 = "Standard"
 
   # Use AKS managed identity with AcrPull role (no admin credentials)
   admin_enabled = false
@@ -76,7 +77,7 @@ module "acr" {
 }
 
 # -------------------------------------------------------
-# Azure Kubernetes Service — Multi-zone node pools
+# Azure Kubernetes Service - Production
 # -------------------------------------------------------
 module "aks" {
   source = "../../Modules/AKS"
@@ -86,7 +87,7 @@ module "aks" {
   resource_group_name = module.resource_group.resource_group_name
   dns_prefix          = var.dns_prefix
   kubernetes_version  = var.kubernetes_version
-  os_disk_size_gb     = 30
+  os_disk_size_gb     = 50
 
   # System node pool — zone 1
   system_node_count   = var.system_node_count
@@ -106,8 +107,9 @@ module "aks" {
   attach_acr = true
   acr_id     = module.acr.acr_id
 
+  # Log Analytics
   create_log_analytics = true
-  log_retention_days   = 30
+  log_retention_days   = 90
 
   tags = local.common_tags
 
@@ -115,7 +117,7 @@ module "aks" {
 }
 
 # -------------------------------------------------------
-# Azure Key Vault
+# Azure Key Vault - Production
 # -------------------------------------------------------
 module "keyvault" {
   source = "../../Modules/keyvaults"
@@ -125,6 +127,7 @@ module "keyvault" {
   resource_group_name = module.resource_group.resource_group_name
   sku_name            = "standard"
 
+  # Enable purge protection to prevent permanent secret deletion
   purge_protection_enabled   = true
   soft_delete_retention_days = 90
 
@@ -148,7 +151,7 @@ module "keyvault" {
 # -------------------------------------------------------
 locals {
   common_tags = {
-    Environment = "dev"
+    Environment = "prod"
     Project     = "netflix-streaming-app"
     ManagedBy   = "terraform"
   }
