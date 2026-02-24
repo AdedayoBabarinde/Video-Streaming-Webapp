@@ -7,17 +7,23 @@ metadata:
     app: netflix-web
     environment: prod
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
-    # Set to "true" once TLS is configured with a certificate
-    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    # cert-manager issues a Let's Encrypt certificate automatically
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
     nginx.ingress.kubernetes.io/rate-limit: "100"
     nginx.ingress.kubernetes.io/rate-limit-window: "1m"
 spec:
   ingressClassName: nginx
+  tls:
+    - hosts:
+        - adedayo.shop
+        - www.adedayo.shop
+      secretName: adedayo-shop-tls   # cert-manager stores the cert here
   rules:
-    - http:
+    - host: adedayo.shop
+      http:
         paths:
           - path: /
             pathType: Prefix
@@ -31,5 +37,15 @@ spec:
             backend:
               service:
                 name: netflix-api-service
+                port:
+                  number: 80
+    - host: www.adedayo.shop
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: netflix-web-service
                 port:
                   number: 80

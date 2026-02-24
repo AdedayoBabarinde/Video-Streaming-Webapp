@@ -1,0 +1,162 @@
+# ============================================================
+# kube-prometheus-stack Helm values
+# Replaces: prometheus-deployment.yml, grafana-deployment.yml,
+#           kube-state-metrics.yml, alertmanager.yml
+#
+# Install:
+#   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#   helm repo update
+#   helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+#     --namespace monitoring --create-namespace \
+#     --values k8s/monitoring/helm-values.yml \
+#     --set grafana.adminPassword=<secret>
+# ============================================================
+
+# -------------------------------------------------------
+# Prometheus
+# -------------------------------------------------------
+prometheus:
+  prometheusSpec:
+    retention: 15d
+    retentionSize: "8GB"
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "512Mi"
+      limits:
+        cpu: "500m"
+        memory: "1Gi"
+
+    # Scrape netflix-dev and netflix-prod namespaces for pod metrics
+    additionalScrapeConfigs:
+      - job_name: "kubernetes-pods-netflix"
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - netflix-dev
+                - netflix-prod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: "true"
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: (.+):(?:\d+);(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          - action: labelmap
+            regex: __meta_kubernetes_pod_label_(.+)
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: kubernetes_namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: kubernetes_pod_name
+
+# -------------------------------------------------------
+# Alertmanager
+# -------------------------------------------------------
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "64Mi"
+      limits:
+        cpu: "100m"
+        memory: "128Mi"
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      group_by: ["alertname", "namespace"]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      receiver: "null"
+      routes:
+        - match:
+            severity: critical
+          receiver: "null"
+    receivers:
+      - name: "null"
+
+# -------------------------------------------------------
+# Grafana
+# -------------------------------------------------------
+grafana:
+  # admin password is set at deploy time via --set grafana.adminPassword=<secret>
+  adminUser: admin
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "250m"
+      memory: "256Mi"
+
+  # Sidecar picks up ConfigMaps/Secrets with label grafana_dashboard: "1"
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: monitoring
+
+  # Default datasource (Prometheus is auto-configured by the chart)
+  additionalDataSources: []
+
+  service:
+    type: LoadBalancer
+    port: 80
+    targetPort: 3000
+
+  # Grafana.ini overrides
+  grafana.ini:
+    server:
+      root_url: "%(protocol)s://%(domain)s/"
+    analytics:
+      check_for_updates: false
+
+# -------------------------------------------------------
+# kube-state-metrics  (included in chart — no separate deploy needed)
+# -------------------------------------------------------
+kube-state-metrics:
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "100m"
+      memory: "128Mi"
+
+# -------------------------------------------------------
+# node-exporter
+# -------------------------------------------------------
+prometheus-node-exporter:
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "32Mi"
+    limits:
+      cpu: "100m"
+      memory: "64Mi"
+
+# -------------------------------------------------------
+# Disable components not available in AKS
+# (AKS manages control plane; we can't scrape etcd/scheduler directly)
+# -------------------------------------------------------
+kubeEtcd:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
