@@ -76,6 +76,10 @@ metadata:
   namespace: monitoring
   labels:
     app: kube-state-metrics
+  annotations:
+    checkov.io/skip1: "CKV_K8S_43=Image digest pinning not used; version-tagged images used for monitoring stability"
+    checkov.io/skip2: "CKV_K8S_38=Service account token required for kube-state-metrics to access K8s API"
+    checkov.io/skip3: "CKV2_K8S_6=NetworkPolicy for monitoring namespace managed separately"
 spec:
   replicas: 1
   selector:
@@ -87,9 +91,15 @@ spec:
         app: kube-state-metrics
     spec:
       serviceAccountName: kube-state-metrics
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: kube-state-metrics
           image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.10.1
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
               name: http-metrics
@@ -102,6 +112,14 @@ spec:
             limits:
               cpu: "100m"
               memory: "128Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+            capabilities:
+              drop:
+                - ALL
           readinessProbe:
             httpGet:
               path: /healthz
