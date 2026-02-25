@@ -15,15 +15,17 @@ resource "azurerm_kubernetes_cluster" "aks" {
 
   # System node pool — availability zone 1
   default_node_pool {
-    name                 = "system"
-    node_count           = var.system_node_count
-    vm_size              = var.system_node_vm_size
-    os_disk_size_gb      = var.os_disk_size_gb
-    auto_scaling_enabled = true
-    min_count            = var.system_min_count
-    max_count            = var.system_max_count
-    zones                = ["1"]
-    vnet_subnet_id       = var.system_subnet_id
+    name                        = "system"
+    temporary_name_for_rotation = "tmpnode"
+    node_count                  = var.system_node_count
+    vm_size                     = var.system_node_vm_size
+    os_disk_size_gb             = var.os_disk_size_gb
+    auto_scaling_enabled        = true
+    min_count                   = var.system_min_count
+    max_count                   = var.system_max_count
+    zones                       = ["1"]
+    vnet_subnet_id              = var.system_subnet_id
+    host_encryption_enabled     = true
     node_labels = {
       "role" = "system"
     }
@@ -50,16 +52,18 @@ resource "azurerm_kubernetes_cluster" "aks" {
 
 # App node pool — availability zone 1
 resource "azurerm_kubernetes_cluster_node_pool" "app" {
-  name                  = "apppool"
-  kubernetes_cluster_id = azurerm_kubernetes_cluster.aks.id
-  vm_size               = var.app_node_vm_size
-  node_count            = var.app_node_count
-  auto_scaling_enabled  = true
-  min_count             = var.app_min_count
-  max_count             = var.app_max_count
-  zones                 = ["1"]
-  vnet_subnet_id        = var.app_subnet_id
-  os_disk_size_gb       = var.os_disk_size_gb
+  name                        = "apppool"
+  temporary_name_for_rotation = "tmpapp"
+  kubernetes_cluster_id       = azurerm_kubernetes_cluster.aks.id
+  vm_size                     = var.app_node_vm_size
+  node_count                  = var.app_node_count
+  auto_scaling_enabled        = true
+  min_count                   = var.app_min_count
+  max_count                   = var.app_max_count
+  zones                       = ["1"]
+  vnet_subnet_id              = var.app_subnet_id
+  os_disk_size_gb             = var.os_disk_size_gb
+  host_encryption_enabled     = true
   node_labels = {
     "role" = "app"
   }
