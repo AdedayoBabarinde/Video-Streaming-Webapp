@@ -2,6 +2,12 @@
 # AKS Module — Multi-zone node pools, OIDC, Workload Identity
 # ============================================================
 
+# checkov:skip=CKV_AZURE_115: Private cluster requires VPN/private DNS infrastructure not in scope for this environment
+# checkov:skip=CKV_AZURE_6:   API server authorized IP ranges not set; use Azure RBAC + private cluster in production
+# checkov:skip=CKV_AZURE_170: Paid SLA SKU (~$100/mo) not justified for dev; enable Standard tier for production
+# checkov:skip=CKV_AZURE_117: Disk encryption set (CMK) requires separate key management infrastructure
+# checkov:skip=CKV_AZURE_226: Ephemeral OS disks conflict with explicit os_disk_size_gb; not used here
+# checkov:skip=CKV_AZURE_141: Local admin disable requires full AAD RBAC setup; handled at deployment level
 resource "azurerm_kubernetes_cluster" "aks" {
   name                = var.cluster_name
   location            = var.location
@@ -13,6 +19,12 @@ resource "azurerm_kubernetes_cluster" "aks" {
   oidc_issuer_enabled       = true
   workload_identity_enabled = true
 
+  # Automatically upgrade patch versions
+  automatic_upgrade_channel = "patch"
+
+  # Azure Policy add-on for governance
+  azure_policy_enabled = true
+
   # System node pool — availability zone 1
   default_node_pool {
     name                        = "system"
@@ -23,9 +35,11 @@ resource "azurerm_kubernetes_cluster" "aks" {
     auto_scaling_enabled        = true
     min_count                   = var.system_min_count
     max_count                   = var.system_max_count
+    max_pods                    = 50
     zones                       = ["1"]
     vnet_subnet_id              = var.system_subnet_id
     host_encryption_enabled     = true
+    only_critical_addons_enabled = true
     node_labels = {
       "role" = "system"
     }
@@ -41,6 +55,12 @@ resource "azurerm_kubernetes_cluster" "aks" {
     load_balancer_sku = "standard"
     service_cidr      = "10.100.0.0/16"
     dns_service_ip    = "10.100.0.10"
+  }
+
+  # Secrets Store CSI Driver with auto-rotation
+  key_vault_secrets_provider {
+    secret_rotation_enabled  = true
+    secret_rotation_interval = "2m"
   }
 
   oms_agent {
@@ -60,6 +80,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "app" {
   auto_scaling_enabled        = true
   min_count                   = var.app_min_count
   max_count                   = var.app_max_count
+  max_pods                    = 50
   zones                       = ["1"]
   vnet_subnet_id              = var.app_subnet_id
   os_disk_size_gb             = var.os_disk_size_gb

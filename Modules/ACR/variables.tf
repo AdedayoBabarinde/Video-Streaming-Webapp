@@ -22,7 +22,7 @@ variable "sku" {
 variable "admin_enabled" {
   description = "Whether admin user is enabled for ACR"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "tags" {

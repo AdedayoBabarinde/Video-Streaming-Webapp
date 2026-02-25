@@ -112,6 +112,7 @@ resource "azurerm_network_security_group" "aks_app" {
 }
 
 # NSG: Ingress subnet (public-facing)
+# checkov:skip=CKV_AZURE_160: Port 80 is required for HTTP-to-HTTPS redirect at the ingress controller layer
 resource "azurerm_network_security_group" "ingress" {
   name                = "${var.vnet_name}-ingress-nsg"
   location            = var.location

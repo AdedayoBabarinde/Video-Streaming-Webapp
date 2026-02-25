@@ -22,7 +22,7 @@ variable "sku_name" {
 variable "purge_protection_enabled" {
   description = "Whether purge protection is enabled"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "soft_delete_retention_days" {
