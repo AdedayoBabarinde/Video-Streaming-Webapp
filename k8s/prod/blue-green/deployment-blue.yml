@@ -130,7 +130,7 @@ spec:
           image: __ACR_LOGIN_SERVER__/netflix-api:__IMAGE_TAG__
           imagePullPolicy: Always
           ports:
-            - containerPort: 80
+            - containerPort: 8080
               protocol: TCP
           envFrom:
             - secretRef:
@@ -153,7 +153,7 @@ spec:
           livenessProbe:
             httpGet:
               path: /
-              port: 80
+              port: 8080
             initialDelaySeconds: 120
             periodSeconds: 30
             timeoutSeconds: 5
@@ -161,7 +161,7 @@ spec:
           readinessProbe:
             httpGet:
               path: /
-              port: 80
+              port: 8080
             initialDelaySeconds: 90
             periodSeconds: 10
             timeoutSeconds: 5
