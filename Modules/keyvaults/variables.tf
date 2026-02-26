@@ -22,7 +22,7 @@ variable "sku_name" {
 variable "purge_protection_enabled" {
   description = "Whether purge protection is enabled"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "soft_delete_retention_days" {
@@ -34,7 +34,7 @@ variable "soft_delete_retention_days" {
 variable "enable_rbac_authorization" {
   description = "Use Azure RBAC for Key Vault data plane access instead of access policies"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "role_assignments" {

@@ -8,19 +8,26 @@ Configure these secrets in your GitHub repository settings
 |--------|-------------|
 | `TMDB_API_KEY` | TMDB API key for movie data |
 
-## Azure Credentials
+## Azure OIDC Credentials (no client secret required)
 | Secret | Description |
 |--------|-------------|
-| `AZURE_CREDENTIALS` | Azure Service Principal JSON (for azure/login) |
-| `ARM_CLIENT_ID` | Azure SP Client ID (for Terraform) |
-| `ARM_CLIENT_SECRET` | Azure SP Client Secret (for Terraform) |
-| `ARM_SUBSCRIPTION_ID` | Azure Subscription ID (for Terraform) |
-| `ARM_TENANT_ID` | Azure AD Tenant ID (for Terraform) |
+| `AZURE_CLIENT_ID` | Azure AD App Registration Client ID |
+| `AZURE_TENANT_ID` | Azure AD Tenant ID |
+| `AZURE_SUBSCRIPTION_ID` | Azure Subscription ID |
+
+> **Note:** We use OIDC/Workload Identity Federation — no `AZURE_CREDENTIALS` JSON blob
+> or `ARM_CLIENT_SECRET` is stored. Run `scripts/setup-oidc.sh` to configure this.
 
 ## Monitoring
 | Secret | Description |
 |--------|-------------|
-| `GRAFANA_ADMIN_PASSWORD` | Grafana admin dashboard password (used by deploy-monitoring workflow) |
+| `GRAFANA_ADMIN_PASSWORD` | Grafana admin dashboard password |
+
+## Notifications
+| Secret | Description |
+|--------|-------------|
+| `SMTP_USERNAME` | Gmail address for deployment notifications |
+| `SMTP_PASSWORD` | Gmail App Password (not your account password) |
 
 ## SonarCloud
 | Secret | Description |
@@ -31,15 +38,19 @@ Configure these secrets in your GitHub repository settings
 
 ## GitHub Environments
 Create two environments in Settings > Environments:
-1. **dev** - Auto-deploy on merge to main
-2. **production** - Requires manual approval (add reviewers)
+1. **dev** — Auto-deploy on merge to main
+2. **production** — Requires manual approval (add reviewers)
 
-## Azure Service Principal Setup
+## OIDC Setup (one-time)
 ```bash
-# Create service principal with Contributor role
-az ad sp create-for-rbac \
-  --name "service principal name" \
-  --role contributor \
-  --scopes /subscriptions/<SUBSCRIPTION_ID> \
-  --sdk-auth
+# Prerequisites: az login, gh auth login
+bash scripts/setup-oidc.sh \
+  --repo <owner/repo> \
+  --set-secrets
+
+# The script will:
+#   1. Create an Azure AD app registration
+#   2. Grant Contributor + Storage Blob Data Contributor roles
+#   3. Add federated credentials for main branch, PRs, dev/production environments
+#   4. Set AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID in GitHub
 ```

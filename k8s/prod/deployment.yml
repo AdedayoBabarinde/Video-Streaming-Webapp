@@ -6,6 +6,9 @@ metadata:
   labels:
     app: netflix-web
     environment: prod
+  annotations:
+    checkov.io/skip1: "CKV_K8S_43=Image digest pinning not used; tags are managed and rotated by the CI/CD pipeline"
+    checkov.io/skip2: "CKV_K8S_22=Nginx requires write access to temp dirs; readOnlyRootFilesystem disabled for web container"
 spec:
   replicas: 3
   selector:
@@ -22,6 +25,12 @@ spec:
         app: netflix-web
         environment: prod
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: netflix-web
           image: __ACR_LOGIN_SERVER__/netflix-app:__IMAGE_TAG__
@@ -39,6 +48,14 @@ spec:
             limits:
               cpu: "500m"
               memory: "512Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            runAsUser: 10001
+            capabilities:
+              drop:
+                - ALL
           livenessProbe:
             httpGet:
               path: /health
@@ -55,11 +72,6 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
-          securityContext:
-            readOnlyRootFilesystem: false
-            runAsNonRoot: true
-            runAsUser: 1001
-            allowPrivilegeEscalation: false
       restartPolicy: Always
       topologySpreadConstraints:
         - maxSkew: 1
@@ -77,6 +89,9 @@ metadata:
   labels:
     app: netflix-api
     environment: prod
+  annotations:
+    checkov.io/skip1: "CKV_K8S_43=Image digest pinning not used; tags are managed and rotated by the CI/CD pipeline"
+    checkov.io/skip2: "CKV_K8S_35=Secrets injected as env vars via secretRef; migrating to volume mounts is a future improvement"
 spec:
   replicas: 2
   selector:
@@ -93,6 +108,12 @@ spec:
         app: netflix-api
         environment: prod
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: netflix-api
           image: __ACR_LOGIN_SERVER__/netflix-api:__IMAGE_TAG__
@@ -110,6 +131,14 @@ spec:
             limits:
               cpu: "1000m"
               memory: "2Gi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+            capabilities:
+              drop:
+                - ALL
           livenessProbe:
             httpGet:
               path: /

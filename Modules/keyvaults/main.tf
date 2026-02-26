@@ -1,3 +1,6 @@
+# checkov:skip=CKV_AZURE_189: Disabling public network access requires private endpoint infrastructure
+# checkov:skip=CKV_AZURE_109: Firewall rules enforcement requires private endpoint; would block all access in dev
+# checkov:skip=CKV2_AZURE_32: Private endpoint for Key Vault requires private DNS zones and VPN infrastructure
 data "azurerm_client_config" "current" {}
 
 resource "azurerm_key_vault" "kv" {

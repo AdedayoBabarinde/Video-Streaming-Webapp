@@ -6,6 +6,9 @@ metadata:
   labels:
     app: netflix-web
     environment: dev
+  annotations:
+    checkov.io/skip1: "CKV_K8S_43=Image digest pinning not used; tags are managed and rotated by the CI/CD pipeline"
+    checkov.io/skip2: "CKV_K8S_22=Nginx requires write access to temp dirs; readOnlyRootFilesystem disabled for web container"
 spec:
   replicas: 2
   selector:
@@ -22,6 +25,12 @@ spec:
         app: netflix-web
         environment: dev
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: netflix-web
           image: __ACR_LOGIN_SERVER__/netflix-app:__IMAGE_TAG__
@@ -39,6 +48,14 @@ spec:
             limits:
               cpu: "250m"
               memory: "256Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            runAsUser: 10001
+            capabilities:
+              drop:
+                - ALL
           livenessProbe:
             httpGet:
               path: /health
@@ -65,6 +82,9 @@ metadata:
   labels:
     app: netflix-api
     environment: dev
+  annotations:
+    checkov.io/skip1: "CKV_K8S_43=Image digest pinning not used; tags are managed and rotated by the CI/CD pipeline"
+    checkov.io/skip2: "CKV_K8S_35=Secrets injected as env vars via secretRef; migrating to volume mounts is a future improvement"
 spec:
   replicas: 1
   selector:
@@ -76,6 +96,12 @@ spec:
         app: netflix-api
         environment: dev
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: netflix-api
           image: __ACR_LOGIN_SERVER__/netflix-api:__IMAGE_TAG__
@@ -93,6 +119,14 @@ spec:
             limits:
               cpu: "1000m"
               memory: "2Gi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+            capabilities:
+              drop:
+                - ALL
           livenessProbe:
             httpGet:
               path: /

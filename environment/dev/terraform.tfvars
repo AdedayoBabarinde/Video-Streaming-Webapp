@@ -18,7 +18,7 @@ system_node_vm_size = "Standard_D2s_v3"
 system_min_count    = 1
 system_max_count    = 3
 
-# App node pool — zone 2
+# App node pool — zone 1
 app_node_count   = 1
 app_node_vm_size = "Standard_D2s_v3"
 app_min_count    = 1

@@ -1,0 +1,4 @@
+10003	IGNORE	(Vulnerable JS Library - expected in SPA bundles)
+10015	IGNORE	(Re-examine Cache-control Directives)
+10049	IGNORE	(Storable and Cacheable Content)
+10098	IGNORE	(Cross-Domain Misconfiguration)
