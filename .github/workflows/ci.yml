@@ -150,7 +150,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Checkov on Terraform
-        uses: bridgecrewio/checkov-action@master
+        uses: bridgecrewio/checkov-action@v12
         with:
           directory: Modules
           framework: terraform
@@ -162,7 +162,7 @@ jobs:
           # CKV2_AZURE_31: AKS authorized IP ranges (acceptable for dev)
 
       - name: Run Checkov on Kubernetes manifests
-        uses: bridgecrewio/checkov-action@master
+        uses: bridgecrewio/checkov-action@v12
         with:
           directory: k8s
           framework: kubernetes
