@@ -195,8 +195,8 @@ jobs:
 
       - name: Wait for rollout
         run: |
-          kubectl rollout status deployment/netflix-web -n ${{ env.NAMESPACE }} --timeout=300s
-          kubectl rollout status deployment/netflix-api -n ${{ env.NAMESPACE }} --timeout=300s
+          kubectl rollout status deployment/netflix-web -n ${{ env.NAMESPACE }} --timeout=600s
+          kubectl rollout status deployment/netflix-api -n ${{ env.NAMESPACE }} --timeout=600s
 
       - name: Verify deployment
         run: |
