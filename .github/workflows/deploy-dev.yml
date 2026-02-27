@@ -156,10 +156,13 @@ jobs:
         run: |
           helm repo add jetstack https://charts.jetstack.io
           helm repo update
+          # Azure Policy (admissionsenforcer) takes ownership of the webhook's namespaceSelector
+          # field after first install, causing SSA field-manager conflicts on subsequent upgrades.
+          # Deleting the webhook before upgrade lets Helm recreate it cleanly; idempotent on first install.
+          kubectl delete validatingwebhookconfiguration cert-manager-webhook --ignore-not-found=true
           helm upgrade --install cert-manager jetstack/cert-manager \
             --namespace cert-manager --create-namespace \
             --set installCRDs=true \
-            --force \
             --wait --timeout 300s
           kubectl apply -f k8s/base/cert-manager-issuers.yml
 
