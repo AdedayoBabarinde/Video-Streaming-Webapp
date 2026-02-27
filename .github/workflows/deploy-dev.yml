@@ -159,6 +159,7 @@ jobs:
           helm upgrade --install cert-manager jetstack/cert-manager \
             --namespace cert-manager --create-namespace \
             --set installCRDs=true \
+            --force \
             --wait --timeout 300s
           kubectl apply -f k8s/base/cert-manager-issuers.yml
 
