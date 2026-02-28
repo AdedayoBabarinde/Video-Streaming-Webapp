@@ -85,8 +85,10 @@ metadata:
   annotations:
     checkov.io/skip1: "CKV_K8S_43=Image digest pinning not used; tags are managed and rotated by the CI/CD pipeline"
     checkov.io/skip2: "CKV_K8S_35=Secrets injected as env vars via secretRef; migrating to volume mounts is a future improvement"
+    checkov.io/skip3: "CKV_K8S_22=SentenceTransformer writes model cache to disk at startup; readOnlyRootFilesystem cannot be enabled for this container"
 spec:
   replicas: 1
+  progressDeadlineSeconds: 900
   selector:
     matchLabels:
       app: netflix-api
@@ -121,7 +123,7 @@ spec:
               memory: "2Gi"
           securityContext:
             allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
+            readOnlyRootFilesystem: false
             runAsNonRoot: true
             runAsUser: 10001
             capabilities:
