@@ -160,6 +160,7 @@ jobs:
             --create-namespace \
             --set controller.replicaCount=2 \
             --set controller.service.externalTrafficPolicy=Local \
+            --set "controller.service.annotations.service\.beta\.kubernetes\.io/azure-load-balancer-health-probe-protocol=tcp" \
             --wait --timeout 300s
 
       - name: Install cert-manager

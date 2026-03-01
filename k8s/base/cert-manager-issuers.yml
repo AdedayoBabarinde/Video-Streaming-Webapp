@@ -24,6 +24,13 @@ spec:
       - http01:
           ingress:
             ingressClassName: nginx
+            ingressTemplate:
+              metadata:
+                annotations:
+                  # Let's Encrypt HTTP-01 challenge must be served over plain HTTP.
+                  # Disable ssl-redirect on the solver ingress so nginx doesn't
+                  # redirect the ACME challenge request to HTTPS before it's answered.
+                  nginx.ingress.kubernetes.io/ssl-redirect: "false"
 ---
 # Production issuer — trusted certificates (rate limited: 5 certs/week per domain)
 apiVersion: cert-manager.io/v1
@@ -40,3 +47,7 @@ spec:
       - http01:
           ingress:
             ingressClassName: nginx
+            ingressTemplate:
+              metadata:
+                annotations:
+                  nginx.ingress.kubernetes.io/ssl-redirect: "false"
