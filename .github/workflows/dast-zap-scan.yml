@@ -101,7 +101,6 @@ jobs:
           cmd_options: "-a -j"
           allow_issue_writing: true
           fail_action: false
-          artifact_name: "zap-baseline-report"
 
   # -------------------------------------------------------
   # Job 3: OWASP ZAP Full Scan (manual only)
@@ -123,7 +122,6 @@ jobs:
           cmd_options: "-a -j"
           allow_issue_writing: true
           fail_action: false
-          artifact_name: "zap-full-report"
 
   # -------------------------------------------------------
   # Job 4: ZAP API Scan
@@ -140,9 +138,8 @@ jobs:
       - name: OWASP ZAP API Scan
         uses: zaproxy/action-api-scan@v0.7.0
         with:
-          target: "${{ needs.resolve-target.outputs.target_url }}/api/"
+          target: "${{ needs.resolve-target.outputs.target_url }}/api/openapi.json"
           format: openapi
           cmd_options: "-a -j"
           allow_issue_writing: true
           fail_action: false
-          artifact_name: "zap-api-report"
