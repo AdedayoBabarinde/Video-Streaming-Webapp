@@ -151,6 +151,7 @@ jobs:
             --namespace ingress-nginx --create-namespace \
             --set controller.replicaCount=1 \
             --set "controller.service.annotations.service\.beta\.kubernetes\.io/azure-load-balancer-health-probe-protocol=tcp" \
+            --set controller.service.appProtocol=false \
             --wait --timeout 300s
 
       - name: Install cert-manager
