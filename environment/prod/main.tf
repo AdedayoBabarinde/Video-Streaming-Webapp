@@ -54,6 +54,11 @@ module "networking" {
   resource_group_name = module.resource_group.resource_group_name
   vnet_address_space  = var.vnet_address_space
 
+  # Prod VNet is 10.1.0.0/16 — subnets must be within this range
+  aks_system_subnet_cidr = "10.1.1.0/24"
+  aks_app_subnet_cidr    = "10.1.2.0/24"
+  ingress_subnet_cidr    = "10.1.3.0/24"
+
   tags = local.common_tags
 
   depends_on = [module.resource_group]
