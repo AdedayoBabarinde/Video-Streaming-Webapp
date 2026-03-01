@@ -150,6 +150,7 @@ jobs:
           helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
             --namespace ingress-nginx --create-namespace \
             --set controller.replicaCount=1 \
+            --set "controller.service.annotations.service\.beta\.kubernetes\.io/azure-load-balancer-health-probe-protocol=tcp" \
             --wait --timeout 300s
 
       - name: Install cert-manager
