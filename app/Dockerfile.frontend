@@ -26,9 +26,9 @@ RUN npm run build
 # ============================================
 # Stage 2: Serve with Nginx
 # ============================================
-FROM nginx:1.27-alpine AS production
+FROM nginx:1.27-alpine3.20 AS production
 
-# Upgrade all packages to pick up security patches (libexpat, libxml2, etc.)
+# Upgrade all packages to pick up any remaining security patches
 RUN apk upgrade --no-cache
 
 # Remove default nginx config
