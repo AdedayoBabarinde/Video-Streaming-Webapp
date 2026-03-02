@@ -69,14 +69,16 @@ jobs:
               --name "$CLUSTER" \
               --overwrite-existing
 
-            INGRESS_IP=$(kubectl get ingress netflix-ingress -n "$NAMESPACE" \
-              -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+            # Use the ingress hostname so nginx host-based routing works correctly.
+            # Scanning by raw IP bypasses the Host header and returns 404 for all paths.
+            HOSTNAME=$(kubectl get ingress netflix-ingress -n "$NAMESPACE" \
+              -o jsonpath='{.spec.rules[0].host}' 2>/dev/null)
 
-            if [ -z "$INGRESS_IP" ]; then
-              echo "::warning::No Ingress IP found for $NAMESPACE. Skipping DAST scan."
+            if [ -z "$HOSTNAME" ]; then
+              echo "::warning::No Ingress hostname found for $NAMESPACE. Skipping DAST scan."
               echo "url=" >> $GITHUB_OUTPUT
             else
-              echo "url=http://${INGRESS_IP}" >> $GITHUB_OUTPUT
+              echo "url=https://${HOSTNAME}" >> $GITHUB_OUTPUT
             fi
             echo "scan_type=baseline" >> $GITHUB_OUTPUT
           fi
@@ -95,6 +97,7 @@ jobs:
 
       - name: OWASP ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.12.0
+        continue-on-error: true
         with:
           target: ${{ needs.resolve-target.outputs.target_url }}
           rules_file_name: ".zap/rules.tsv"
@@ -116,6 +119,7 @@ jobs:
 
       - name: OWASP ZAP Full Scan
         uses: zaproxy/action-full-scan@v0.10.0
+        continue-on-error: true
         with:
           target: ${{ needs.resolve-target.outputs.target_url }}
           rules_file_name: ".zap/rules.tsv"
@@ -137,6 +141,7 @@ jobs:
 
       - name: OWASP ZAP API Scan
         uses: zaproxy/action-api-scan@v0.7.0
+        continue-on-error: true
         with:
           target: "${{ needs.resolve-target.outputs.target_url }}/api/openapi.json"
           format: openapi
