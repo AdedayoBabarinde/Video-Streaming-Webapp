@@ -212,8 +212,16 @@ jobs:
 
       - name: Wait for rollout
         run: |
-          kubectl rollout status deployment/netflix-web -n ${{ env.NAMESPACE }} --timeout=600s
-          kubectl rollout status deployment/netflix-api -n ${{ env.NAMESPACE }} --timeout=600s
+          # Run both checks in parallel so netflix-web's wait time doesn't
+          # consume netflix-api's progressDeadlineSeconds (900s) budget.
+          kubectl rollout status deployment/netflix-web -n ${{ env.NAMESPACE }} --timeout=600s &
+          WEB_PID=$!
+          kubectl rollout status deployment/netflix-api -n ${{ env.NAMESPACE }} --timeout=600s &
+          API_PID=$!
+          WEB_RESULT=0; API_RESULT=0
+          wait $WEB_PID || WEB_RESULT=$?
+          wait $API_PID || API_RESULT=$?
+          [ $WEB_RESULT -eq 0 ] && [ $API_RESULT -eq 0 ]
 
       - name: Wait for Ingress IP assignment
         id: get-ingress
@@ -278,18 +286,23 @@ jobs:
 
       - name: Run smoke tests
         run: |
-          # Get the ingress IP
-          INGRESS_IP=$(kubectl get ingress netflix-ingress -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          # Get the ingress hostname for host-based routing (raw IP bypasses Host header, returns 404)
+          HOSTNAME=$(kubectl get ingress netflix-ingress -n ${{ env.NAMESPACE }} \
+            -o jsonpath='{.spec.rules[0].host}' 2>/dev/null)
+          INGRESS_IP=$(kubectl get ingress netflix-ingress -n ${{ env.NAMESPACE }} \
+            -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
 
-          if [ -z "$INGRESS_IP" ]; then
-            echo "::warning::Ingress IP not available yet. Skipping smoke tests."
+          if [ -z "$INGRESS_IP" ] || [ -z "$HOSTNAME" ]; then
+            echo "::warning::Ingress IP or hostname not available yet. Skipping smoke tests."
             exit 0
           fi
 
-          echo "Ingress IP: $INGRESS_IP"
+          echo "Ingress IP: $INGRESS_IP  Hostname: $HOSTNAME"
 
+          # Use Host header so nginx ingress routes correctly before DNS propagation
           echo "Testing health endpoint..."
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://${INGRESS_IP}/health --max-time 10)
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Host: ${HOSTNAME}" http://${INGRESS_IP}/health --max-time 10)
           if [ "$HTTP_CODE" != "200" ]; then
             echo "::error::Health check failed with HTTP ${HTTP_CODE}"
             exit 1
@@ -297,7 +310,8 @@ jobs:
           echo "Health check passed (HTTP ${HTTP_CODE})"
 
           echo "Testing API endpoint..."
-          API_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://${INGRESS_IP}/api/ --max-time 10)
+          API_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Host: ${HOSTNAME}" http://${INGRESS_IP}/api/ --max-time 10)
           if [ "$API_CODE" != "200" ]; then
             echo "::warning::API health check returned HTTP ${API_CODE}"
           fi
