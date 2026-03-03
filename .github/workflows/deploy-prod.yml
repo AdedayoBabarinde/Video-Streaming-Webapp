@@ -299,10 +299,11 @@ jobs:
 
           echo "Ingress IP: $INGRESS_IP  Hostname: $HOSTNAME"
 
-          # Use Host header + follow SSL redirect (-L) + skip cert verify (-k, connecting via IP not DNS)
+          # Test HTTPS directly against the IP (avoids redirect + DNS dependency).
+          # -k skips cert CN validation since we connect via IP, not the hostname.
           echo "Testing health endpoint..."
-          HTTP_CODE=$(curl -sLk -o /dev/null -w "%{http_code}" \
-            -H "Host: ${HOSTNAME}" http://${INGRESS_IP}/health --max-time 10)
+          HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" \
+            -H "Host: ${HOSTNAME}" https://${INGRESS_IP}/health --max-time 10)
           if [ "$HTTP_CODE" != "200" ]; then
             echo "::error::Health check failed with HTTP ${HTTP_CODE}"
             exit 1
@@ -310,8 +311,8 @@ jobs:
           echo "Health check passed (HTTP ${HTTP_CODE})"
 
           echo "Testing API endpoint..."
-          API_CODE=$(curl -sLk -o /dev/null -w "%{http_code}" \
-            -H "Host: ${HOSTNAME}" http://${INGRESS_IP}/api/ --max-time 10)
+          API_CODE=$(curl -sk -o /dev/null -w "%{http_code}" \
+            -H "Host: ${HOSTNAME}" https://${INGRESS_IP}/api/ --max-time 10)
           if [ "$API_CODE" != "200" ]; then
             echo "::warning::API health check returned HTTP ${API_CODE}"
           fi
