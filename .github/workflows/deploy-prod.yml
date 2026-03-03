@@ -299,9 +299,9 @@ jobs:
 
           echo "Ingress IP: $INGRESS_IP  Hostname: $HOSTNAME"
 
-          # Use Host header so nginx ingress routes correctly before DNS propagation
+          # Use Host header + follow SSL redirect (-L) + skip cert verify (-k, connecting via IP not DNS)
           echo "Testing health endpoint..."
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+          HTTP_CODE=$(curl -sLk -o /dev/null -w "%{http_code}" \
             -H "Host: ${HOSTNAME}" http://${INGRESS_IP}/health --max-time 10)
           if [ "$HTTP_CODE" != "200" ]; then
             echo "::error::Health check failed with HTTP ${HTTP_CODE}"
@@ -310,7 +310,7 @@ jobs:
           echo "Health check passed (HTTP ${HTTP_CODE})"
 
           echo "Testing API endpoint..."
-          API_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+          API_CODE=$(curl -sLk -o /dev/null -w "%{http_code}" \
             -H "Host: ${HOSTNAME}" http://${INGRESS_IP}/api/ --max-time 10)
           if [ "$API_CODE" != "200" ]; then
             echo "::warning::API health check returned HTTP ${API_CODE}"
