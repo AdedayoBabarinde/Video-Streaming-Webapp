@@ -116,6 +116,11 @@ grafana:
     type: LoadBalancer
     port: 80
     targetPort: 3000
+    annotations:
+      # Azure CCM defaults to HTTP health probes when port is named "http".
+      # Grafana's "/" returns 302 (redirect to login), failing the HTTP probe.
+      # Force TCP so the LB marks backends healthy regardless of HTTP response.
+      service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol: tcp
 
   # Grafana.ini overrides
   grafana.ini:

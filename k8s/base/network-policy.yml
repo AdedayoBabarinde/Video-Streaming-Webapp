@@ -18,7 +18,7 @@ spec:
               app: netflix-streaming
       ports:
         - protocol: TCP
-          port: 80
+          port: 8080
     # Allow ingress controller traffic
     - from:
         - namespaceSelector:
@@ -26,7 +26,7 @@ spec:
               kubernetes.io/metadata.name: ingress-nginx
       ports:
         - protocol: TCP
-          port: 80
+          port: 8080
   egress:
     # Allow DNS resolution
     - to: []
@@ -62,14 +62,14 @@ spec:
               app: netflix-web
       ports:
         - protocol: TCP
-          port: 80
+          port: 8080
     - from:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: ingress-nginx
       ports:
         - protocol: TCP
-          port: 80
+          port: 8080
   egress:
     # Allow DNS resolution
     - to: []

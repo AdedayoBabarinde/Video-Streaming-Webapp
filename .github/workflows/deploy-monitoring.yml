@@ -9,7 +9,7 @@ on:
         type: choice
         options:
           - dev
-          - prod
+          - production
 
 env:
   AKS_CLUSTER_NAME_DEV: netflix-app-dev-aks
@@ -41,7 +41,7 @@ jobs:
       - name: Set cluster variables
         id: cluster
         run: |
-          if [ "${{ inputs.environment }}" = "prod" ]; then
+          if [ "${{ inputs.environment }}" = "production" ]; then
             echo "cluster_name=${{ env.AKS_CLUSTER_NAME_PROD }}" >> $GITHUB_OUTPUT
             echo "resource_group=${{ env.AKS_RESOURCE_GROUP_PROD }}" >> $GITHUB_OUTPUT
           else
