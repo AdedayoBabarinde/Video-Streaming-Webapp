@@ -345,97 +345,9 @@ kubectl get svc kube-prometheus-stack-grafana -n monitoring
 # Navigate to: Dashboards → Netflix Streaming App
 ```
 
----
 
-## Getting Started
 
-### Prerequisites
 
-```bash
-node --version   # 18+
-python --version # 3.10+
-docker version
-az version       # Azure CLI 2.50+
-terraform version # 1.5+
-kubectl version --client
-helm version     # 3.12+
-gh version       # GitHub CLI 2.30+
-```
-
-### Local Development
-
-**Frontend:**
-```bash
-cd app
-cp .env.example .env      # add VITE_APP_TMDB_V3_API_KEY=<your_key>
-npm install
-npm run dev               # → http://localhost:5173
-```
-
-**Backend API:**
-```bash
-cd app
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-uvicorn main:app --reload  # → http://localhost:8000
-```
-
-**Docker (both services):**
-```bash
-cd app
-docker build -f Dockerfile.frontend \
-  --build-arg VITE_APP_TMDB_V3_API_KEY=<key> \
-  -t netflix-app:local .
-docker run -p 8080:8080 netflix-app:local
-
-docker build -f Dockerfile -t netflix-api:local .
-docker run -p 8000:80 netflix-api:local
-```
-
-### Full Deployment (summary)
-
-```bash
-# 1. Bootstrap Azure state storage (one-time)
-source scripts/setup-env.sh dev --setup-backend
-source scripts/setup-env.sh prod --setup-backend
-
-# 2. Configure OIDC (one-time)
-bash scripts/setup-oidc.sh --repo <owner/repo> --set-secrets
-
-# 3. Add remaining GitHub secrets manually (TMDB_API_KEY, GRAFANA_ADMIN_PASSWORD, etc.)
-#    See .github/SECRETS_REQUIRED.md
-
-# 4. Create GitHub environments: dev (no gates) + production (reviewer required)
-
-# 5. Provision infrastructure
-cd environment/dev && terraform init && terraform apply
-cd environment/prod && terraform init && terraform apply
-
-# 6. Push to main → deploy-dev.yml triggers automatically
-
-# 7. Deploy monitoring
-#    GitHub → Actions → Deploy Monitoring Stack → dev
-
-# 8. Configure DNS (after Ingress IP is assigned)
-bash scripts/setup-dns.sh    # prints DNS records for GoDaddy
-
-# 9. Promote to prod
-#    GitHub → Actions → Deploy to Production → image_tag=<sha7> + confirm_deploy=deploy-prod
-```
-
-**For full step-by-step instructions, see [docs/BUILD_GUIDE.md](docs/BUILD_GUIDE.md).**
-
----
-
-## Documentation
-
-| Document | Description |
-|----------|-------------|
-| [docs/BUILD_GUIDE.md](docs/BUILD_GUIDE.md) | Complete 17-section build guide: prerequisites → local dev → Azure bootstrap → OIDC → Terraform → CI/CD → Blue/Green → DNS/TLS → teardown → troubleshooting |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 9 ASCII architecture diagrams: system overview, VNet topology, CI/CD pipeline, K8s cluster layout, OIDC chain, data flow, secret management, monitoring flow, Terraform dependency graph |
-| [.github/SECRETS_REQUIRED.md](.github/SECRETS_REQUIRED.md) | All required GitHub secrets with descriptions and OIDC setup instructions |
-
----
 
 ## Screenshots
 
