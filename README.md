@@ -1,9 +1,9 @@
 # Netflix-Style Video Streaming Webapp
 
 A full-stack Netflix clone built with **React 18 + TypeScript + Material-UI**, powered by the TMDB API.
-Backed by a complete **DevSecOps pipeline** on Azure: Terraform IaC, GitHub Actions CI/CD, 
-AKS with multi-zone node pools, Blue/Green deployments, Helm-managed monitoring, and automated
- TLS via cert-manager +  Encrypted on **adedayo.shop**.
+Backed by a complete **DevSecOps pipeline** on Azure: Terraform IaC, GitHub Actions CI/CD,
+AKS with multi-zone node pools, **Azure Front Door + WAF** global edge, **Blue/Green deployments via Argo Rollouts**,
+ACR and Key Vault on **Private Endpoints**, and automated TLS via cert-manager. Live at **adedayo.shop**.
 
 ![Home Page](app/public/assets/home-page.png)
 
@@ -34,23 +34,27 @@ AKS with multi-zone node pools, Blue/Green deployments, Helm-managed monitoring,
 - **FastAPI** backend with **Sentence Transformers** ML embeddings for similarity search
 
 ### Infrastructure & DevOps
-- **Modular Terraform** IaC on Azure (AKS, ACR, Key Vault, custom VNet)
+- **Modular Terraform** IaC on Azure (AKS, ACR, Key Vault, Front Door, custom VNet)
+- **Azure Front Door Standard** — global CDN edge with TLS termination and HTTPS redirect
 - **Multi-zone AKS node pools** — system pool (zone 1) + app pool (zone 2) for high availability
-- **Custom VNet** with 3 segmented subnets and NSG rules (no direct Internet access to node pools)
+- **Custom VNet** with 4 segmented subnets: system, app, ingress, and private endpoints
 - **Azure CNI** networking with Azure Network Policy enforcement
+- **NSG**: port 443 restricted to `AzureFrontDoor.Backend` service tag — prevents LB bypass
 - **OIDC/Workload Identity Federation** — no long-lived secrets stored anywhere
-- **Blue/Green deployments** for production — zero-downtime releases with instant rollback
-- **cert-manager** + Encryption and automatic TLS for `adedayo.shop` and `dev.adedayo.shop`
-- **Helm-managed monitoring** via `kube-prometheus-stack`
-- **6 GitHub Actions workflows** covering build, deploy, infrastructure, monitoring, Blue/Green, and DAST
+- **Argo Rollouts Blue/Green** — zero-downtime releases with manual promotion gate and instant rollback
+- **cert-manager** + Let's Encrypt automatic TLS for `adedayo.shop` and `www.adedayo.shop`
+- **Helm-managed monitoring** via `kube-prometheus-stack` on the App Node Pool
 
 ### Security
+- **WAF Policy (Prevention Mode)** — DefaultRuleSet 1.0 (OWASP Top 10) + BotManagerRuleSet 1.0 at AFD edge
+- **ACR Private Endpoint** — Premium SKU, public network access disabled, resolves via `privatelink.azurecr.io`
+- **Key Vault Private Endpoint** — public network access disabled, resolves via `privatelink.vaultcore.azure.net`
 - **Trivy** — container image and filesystem CVE scanning
 - **SonarCloud** — SAST quality gate (blocks deploy on failure)
 - **Checkov** — IaC security scanning (Terraform + Kubernetes manifests → GitHub Security tab)
 - **OWASP ZAP** — dynamic application security testing (DAST) on production
 - **Kubernetes Network Policies** — deny-all default, allow-list per service
-- **Non-root containers** — all pods run as UID 1001, port 8080
+- **Non-root containers** — all pods run as UID 10001, port 8080
 - **RBAC** throughout — Key Vault Secrets User, AcrPull via managed identity
 - **PodDisruptionBudget** on production — `minAvailable: 2`
 
@@ -63,79 +67,133 @@ AKS with multi-zone node pools, Blue/Green deployments, Helm-managed monitoring,
 | **Frontend** | React 18, TypeScript, Material-UI v5, Redux Toolkit, RTK Query, Vite, Framer Motion, VideoJS |
 | **Backend** | FastAPI, Python 3.10, Sentence Transformers (all-MiniLM-L6-v2) |
 | **Containers** | Docker (multi-stage), Nginx 1.25 Alpine (port 8080, non-root) |
-| **Orchestration** | Kubernetes 1.33 on AKS, Helm 3 |
+| **Orchestration** | Kubernetes 1.33 on AKS, Helm 3, Argo Rollouts |
+| **Edge / CDN** | Azure Front Door Standard, WAF Policy (Prevention Mode) |
 | **Networking** | Azure CNI, Azure Network Policy, custom VNet, NSGs, Nginx Ingress Controller |
-| **TLS** | cert-manager, Encryption ACME HTTP-01 |
-| **Infrastructure** | Terraform ~> 4.0 (azurerm), Azure AKS, ACR, Key Vault, Log Analytics |
-| **CI/CD** | GitHub Actions (6 workflows), OIDC federation |
-| **Security** | Trivy, SonarCloud, Checkov, OWASP ZAP, RBAC, Network Policies |
+| **TLS** | cert-manager, Let's Encrypt ACME HTTP-01 |
+| **Infrastructure** | Terraform ~> 4.0 (azurerm), AKS, ACR (Premium), Key Vault, Log Analytics, Front Door |
+| **Private Connectivity** | ACR Private Endpoint, Key Vault Private Endpoint, Private DNS Zones |
+| **CI/CD** | GitHub Actions (5 workflows), OIDC federation |
+| **Deployments** | Argo Rollouts — Blue/Green strategy, manual promotion, 60s blue scale-down |
+| **Security** | Trivy, SonarCloud, Checkov, OWASP ZAP, WAF, RBAC, Network Policies |
 | **Monitoring** | kube-prometheus-stack (Prometheus, Grafana, Alertmanager, kube-state-metrics) |
-| **DNS** | GoDaddy — adedayo.shop |
+| **DNS** | GoDaddy — adedayo.shop (CNAME → Azure Front Door) |
 
 ---
 
 ## Architecture Overview
 
-### System Architecture
+### Production Traffic Flow
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│  Internet / End Users                                                    │
-│  adedayo.shop  ·  www.adedayo.shop  ·  dev.adedayo.shop                 │
-└──────────────────────────────┬──────────────────────────────────────────┘
-                               │ HTTPS ( Encrypted TLS)
-                               ▼
-          GoDaddy DNS (A record → Ingress IP)
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│  Azure Kubernetes Service (AKS 1.33)                                     │
-│                                                                          │
-│  Ingress Subnet (10.x.3.0/24)                                           │
-│  ┌───────────────────────────────────────────────────────────────────┐  │
-│  │  ingress-nginx (LoadBalancer)  ·  cert-manager                   │  │
-│  └──────────────────┬────────────────────────┬──────────────────────┘  │
-│                     │ /                       │ /api                    │
-│  App Subnet (10.x.2.0/24)  ·  Availability Zone 2                      │
-│  ┌───────────────────────┐   ┌──────────────────────────────────────┐  │
-│  │  netflix-web          │   │  netflix-api                         │  │
-│  │  React + Nginx        │   │  FastAPI + Sentence Transformers     │  │
-│  │  port 8080, UID 1001  │   │  port 80, 2Gi RAM limit              │  │
-│  │  HPA: 2-4 / 3-10      │   │  HPA (tied to web)                  │  │
-│  └───────────────────────┘   └──────────────────────────────────────┘  │
-│                                                                          │
-│  System Subnet (10.x.1.0/24)  ·  Availability Zone 1                   │
-│  ┌───────────────────────────────────────────────────────────────────┐  │
-│  │  kube-system  ·  cert-manager  ·  monitoring namespace           │  │
-│  │  Prometheus  ·  Grafana  ·  Alertmanager  ·  kube-state-metrics  │  │
-│  └───────────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────┘
-         │                           │
-         ▼                           ▼
-┌──────────────────┐      ┌──────────────────────────┐
-│ Azure ACR         │      │ Azure Key Vault (RBAC)    │
-│ Dev: Basic SKU    │      │ kubelet → Secrets User    │
-│ Prod: Standard    │      │ purge-protection 90d      │
-└──────────────────┘      └──────────────────────────┘
+Users
+  │
+  ├── DNS lookup → GoDaddy (adedayo.shop)
+  │                  CNAME → Azure Front Door endpoint
+  │
+  ▼
+┌─────────────────────────────────────────────────────┐
+│  Azure Front Door Standard  —  Global CDN Edge       │
+│  TLS termination  ·  AFD-managed certificates        │
+│  HTTPS redirect (HTTP → 308)                         │
+│                                                      │
+│  ┌─────────────────────────────────────────────┐    │
+│  │  WAF Policy  (Prevention Mode)               │    │
+│  │  DefaultRuleSet 1.0  — OWASP Top 10          │    │
+│  │  BotManagerRuleSet 1.0  — bot protection     │    │
+│  └─────────────────────────────────────────────┘    │
+└──────────────────────────┬──────────────────────────┘
+                           │ HTTPS  (AzureFrontDoor.Backend)
+                           ▼
+┌─────────────────────────────────────────────────────┐
+│  NSG  —  Azure Virtual Network  (10.1.0.0/16)       │
+│  Port 443: AzureFrontDoor.Backend only               │
+│  Port 80:  Internet  (ACME HTTP-01 cert renewals)   │
+│                                                      │
+│  Azure Standard Load Balancer  (128.203.69.104)      │
+│  Auto-provisioned by AKS CCM  ·  TCP health probe   │
+└──────────────────────────┬──────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  AKS Subnet  (Azure CNI + Network Policy)                            │
+│                                                                      │
+│  ┌────────────────────────────┐  ┌──────────────────────────────┐   │
+│  │  System Node Pool (Zone 1) │  │  App Node Pool (Zone 2)      │   │
+│  │  Taint: CriticalAddonsOnly │  │  Autoscale 2→6  (no taints)  │   │
+│  │                            │  │                              │   │
+│  │  ingress-nginx  (2 pods)   │  │  argo-rollouts namespace     │   │
+│  │  cert-manager              │  │  ┌──────────────────────┐   │   │
+│  │                            │  │  │ Argo Rollouts Ctrl   │   │   │
+│  └────────────────────────────┘  │  └──────────────────────┘   │   │
+│                                  │                              │   │
+│                                  │  netflix-prod namespace      │   │
+│                                  │  ┌──────────────────────┐   │   │
+│                                  │  │ netflix-web (B/G)     │   │   │
+│                                  │  │  active ← ingress     │   │   │
+│                                  │  │  preview ← smoke test │   │   │
+│                                  │  │ netflix-api (B/G)     │   │   │
+│                                  │  │  active ← ingress     │   │   │
+│                                  │  │  preview ← smoke test │   │   │
+│                                  │  │ HPA · PDB · Ingress   │   │   │
+│                                  │  └──────────────────────┘   │   │
+│                                  │                              │   │
+│                                  │  monitoring namespace        │   │
+│                                  │  ┌──────────────────────┐   │   │
+│                                  │  │ Prometheus (15s/15d)  │   │   │
+│                                  │  │ Grafana (ops access)  │   │   │
+│                                  │  │ Alertmanager          │   │   │
+│                                  │  │ kube-state-metrics    │   │   │
+│                                  │  └──────────────────────┘   │   │
+│                                  └──────────────────────────────┘   │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │  Private Endpoint Subnet (10.1.4.0/24)
+              ┌────────────────┴─────────────────┐
+              ▼                                   ▼
+┌─────────────────────────┐          ┌─────────────────────────┐
+│  Azure Container         │          │  Azure Key Vault         │
+│  Registry (Premium SKU) │          │  🔒 Private Endpoint     │
+│  🔒 Private Endpoint    │          │  public access disabled  │
+│  public access disabled │          │  Secrets User RBAC       │
+│  AcrPull managed identity│         └─────────────────────────┘
+└─────────────────────────┘
+```
+
+### Argo Rollouts — Blue/Green Flow
+
+```
+CI/CD pushes new image tag → Argo Rollouts Controller detects spec change
+  │
+  ├── spins up green replica set (preview replicas)
+  ├── patches netflix-web-preview / netflix-api-preview selectors → green pods
+  ├── smoke test runs against preview service
+  │
+  ├── engineer runs: kubectl argo rollouts promote netflix-web -n netflix-prod
+  │
+  ├── patches netflix-web-active selector → green pods  (zero-downtime flip)
+  └── scales down blue replica set after 60 seconds
 ```
 
 ### VNet Network Segmentation
 
 ```
-Azure VNet  (Dev: 10.0.0.0/16  |  Prod: 10.1.0.0/16)
-├── aks-system subnet  (zone 1)   NSG: deny Internet in, allow VNet
-├── aks-app    subnet  (zone 2)   NSG: deny Internet in, allow VNet
-└── ingress    subnet             NSG: allow :80 and :443 from Internet
+Azure VNet  (Prod: 10.1.0.0/16)
+├── aks-system subnet    (10.1.1.0/24)  Zone 1 — system node pool
+├── aks-app    subnet    (10.1.2.0/24)  Zone 2 — app node pool
+├── ingress    subnet    (10.1.3.0/24)  Load Balancer frontend
+└── private-endpoints    (10.1.4.0/24)  ACR PE + Key Vault PE
+                                         private_endpoint_network_policies=Disabled
 ```
 
 ### Terraform Module Graph
 
 ```
 resource-group
-  ├── networking  (VNet, subnets, NSGs)
-  ├── ACR
-  └── AKS  (depends on networking + ACR)
-        └── keyvaults  (depends on AKS kubelet identity)
+  ├── networking  (VNet, subnets, NSGs, private-endpoint subnet)
+  ├── ACR         (Premium SKU, private endpoint, private DNS zone)
+  ├── keyvaults   (private endpoint, private DNS zone)
+  ├── frontdoor   (AFD Standard profile, WAF policy, custom domains)
+  └── AKS         (depends on networking + ACR)
 ```
 
 ---
@@ -162,10 +220,11 @@ netflix-streaming-webapp/
 │
 ├── Modules/                     # Terraform module library
 │   ├── resource-group/          # Azure Resource Group
-│   ├── networking/              # VNet + subnets + NSGs
-│   ├── ACR/                     # Azure Container Registry
+│   ├── networking/              # VNet + subnets + NSGs + private-endpoint subnet
+│   ├── ACR/                     # Azure Container Registry (Premium, private endpoint)
 │   ├── AKS/                     # AKS cluster (multi-zone node pools, OIDC)
-│   ├── keyvaults/               # Key Vault + RBAC
+│   ├── keyvaults/               # Key Vault + private endpoint + RBAC
+│   ├── frontdoor/               # Azure Front Door Standard + WAF policy
 │   └── secrets-manager/         # Key Vault secret storage
 │
 ├── environment/                 # Environment-specific Terraform configs
@@ -176,8 +235,9 @@ netflix-streaming-webapp/
 │   ├── base/                    # Shared: namespaces, configmaps, network-policies,
 │   │                            #         cert-manager-issuers
 │   ├── dev/                     # Dev: deployment, service, ingress, hpa
-│   ├── prod/                    # Prod: deployment, service, ingress, hpa, pdb
-│   │   └── blue-green/          # Blue/Green: deployment-blue, deployment-green, services
+│   ├── prod/                    # Prod: service, ingress, hpa, pdb
+│   │   └── argo-rollouts/       # Rollout CRDs: rollout-web.yml, rollout-api.yml,
+│   │                            #               services.yml (active + preview pairs)
 │   └── monitoring/              # kube-prometheus-stack Helm values,
 │                                #   Netflix custom Grafana dashboard ConfigMap
 │
@@ -185,10 +245,8 @@ netflix-streaming-webapp/
 │   ├── workflows/
 │   │   ├── ci.yml               # PR: build, TypeScript, Trivy, SonarCloud, Checkov
 │   │   ├── deploy-dev.yml       # Auto-deploy to dev on push to main
-│   │   ├── deploy-prod.yml      # Manual prod deploy with approval gate
+│   │   ├── deploy-prod.yml      # Manual prod deploy — acr import → approval → Argo Rollouts
 │   │   ├── terraform.yml        # Terraform plan / apply / destroy
-│   │   ├── deploy-monitoring.yml# Helm: kube-prometheus-stack
-│   │   ├── blue-green-deploy.yml# Blue/Green: deploy-and-switch, rollback
 │   │   └── dast-zap-scan.yml    # OWASP ZAP dynamic security scan
 │   └── SECRETS_REQUIRED.md      # All required GitHub secrets
 │
@@ -199,8 +257,9 @@ netflix-streaming-webapp/
 │   └── setup-dns.sh             # GoDaddy DNS record configuration
 │
 └── docs/
-    ├── BUILD_GUIDE.md           # Step-by-step full build guide (17 sections)
-    └── ARCHITECTURE.md          # 9 detailed ASCII architecture diagrams
+    ├── BUILD_GUIDE.md           # Step-by-step full build guide
+    ├── ARCHITECTURE.md          # Detailed architecture diagrams
+    └── architecture.drawio      # draw.io production architecture diagram
 ```
 
 ---
@@ -210,21 +269,28 @@ netflix-streaming-webapp/
 | | Dev | Prod |
 |---|-----|------|
 | **Domain** | `dev.adedayo.shop` | `adedayo.shop` + `www.adedayo.shop` |
-| **TLS Issuer** | Let's Encrypt Staging | Let's Encrypt Production |
-| **ACR SKU** | Basic | Standard |
+| **DNS record** | A record → Ingress LB IP | CNAME → Azure Front Door endpoint |
+| **Edge / CDN** | None | Azure Front Door Standard |
+| **WAF** | None | Prevention Mode — DefaultRuleSet + BotManagerRuleSet |
+| **TLS Issuer** | Let's Encrypt Staging | Let's Encrypt Production (via cert-manager) |
+| **ACR SKU** | Basic | **Premium** (required for private endpoint) |
+| **ACR access** | Public | **Private Endpoint** — public access disabled |
+| **Key Vault access** | Public | **Private Endpoint** — public access disabled |
+| **Private endpoint subnet** | None | `10.1.4.0/24` |
 | **VNet CIDR** | 10.0.0.0/16 | 10.1.0.0/16 |
-| **System node pool** | zone 1, 1 node, autoscale 1–3 | zone 1, 1 node, autoscale 1–3 |
-| **App node pool** | zone 2, 1 node, autoscale 1–5 | zone 2, 2 nodes, autoscale 2–6 |
+| **NSG port 443** | Internet | `AzureFrontDoor.Backend` service tag only |
+| **System node pool** | Zone 1, autoscale 1–3 | Zone 1, autoscale 1–3 |
+| **App node pool** | Zone 2, autoscale 1–5 | Zone 2, autoscale 2–6 |
 | **VM size** | Standard_D2s_v3 | Standard_D2s_v3 |
-| **Web replicas** | 2 | 3 (topology spread across nodes) |
-| **API replicas** | 1 | 2 |
+| **Deployment strategy** | Rolling (standard Deployment) | **Argo Rollouts — Blue/Green** |
+| **Web replicas** | 2 | 3 active / 2 preview |
+| **API replicas** | 1 | 2 active / 1 preview |
 | **HPA (web)** | min 2, max 4 | min 3, max 10 |
 | **PDB** | None | `minAvailable: 2` |
-| **Security context** | Standard | `runAsUser=1001`, `runAsNonRoot=true` |
+| **Security context** | Standard | `runAsUser=10001`, `runAsNonRoot=true`, `seccompProfile=RuntimeDefault` |
 | **Key Vault soft-delete** | 90 days | 90 days + purge protection |
 | **Log Analytics retention** | 30 days | 90 days |
-| **Deploy trigger** | Auto on merge to main | Manual `workflow_dispatch` + approval |
-| **Blue/Green** | No | Yes (blue-green-deploy.yml) |
+| **Deploy trigger** | Auto on merge to main | Manual `workflow_dispatch` + approval gate |
 | **Trivy exit code** | 0 (report only) | 1 (blocks on CRITICAL) |
 | **Ingress-nginx replicas** | 1 | 2 (`externalTrafficPolicy=Local`) |
 
@@ -260,16 +326,11 @@ Manual trigger
                           → Trivy CRITICAL scan (exit-code: 1)
                           → GitHub environment approval gate
                           → helm install ingress-nginx + cert-manager
-                          → kubectl apply (prod manifests)
-                          → smoke test (curl /health + /api/)
-                          → email notification with Ingress IP
-
-  └── deploy-monitoring.yml ──► helm install kube-prometheus-stack
-                                → apply Netflix custom dashboard ConfigMap
-
-  └── blue-green-deploy.yml ──► deploy-and-switch  (deploy to inactive slot, switch traffic)
-                                switch-only         (traffic flip without deploy)
-                                rollback            (revert service selector to previous slot)
+                          → kubectl apply (prod argo-rollouts manifests)
+                          → Argo Rollouts controller manages Blue/Green lifecycle
+                          → smoke test against preview service
+                          → manual promotion: kubectl argo rollouts promote
+                          → email notification
 
   └── dast-zap-scan.yml ──► OWASP ZAP baseline + full + API scan on production
 ```
@@ -281,12 +342,10 @@ All workflows authenticate to Azure using **OIDC federated identity** — no cli
 ```
 GitHub Actions runner
   → generates OIDC token (signed by github.com)
-  → azure/login@v2 exchanges it for an Azure access token
-  → short-lived token used by az CLI + terraform (ARM_USE_OIDC=true)
+  → azure/login@v2 exchanges it with Azure AD for a short-lived access token
+  → token used by az CLI + terraform (ARM_USE_OIDC=true)
   → no secrets stored in GitHub, no rotation needed
 ```
-
-Setup (one-time): `bash scripts/setup-oidc.sh --repo <owner/repo> --set-secrets`
 
 Required GitHub secrets (3 total, no passwords):
 
@@ -300,30 +359,34 @@ Required GitHub secrets (3 total, no passwords):
 
 ## Security Layers
 
-| Layer | Tool | When |
-|-------|------|------|
+| Layer | Tool / Mechanism | When |
+|-------|-----------------|------|
+| Global edge filtering | **WAF Policy — Prevention Mode** (AFD) | Runtime — every request |
 | SAST | SonarCloud | Every PR + before deploy |
 | Container CVE | Trivy (image) | After docker build |
 | Filesystem CVE | Trivy (fs) | Every PR |
 | IaC security | Checkov (Terraform + K8s) | Every PR + terraform plan |
 | Dynamic security | OWASP ZAP | After prod deploy |
-| Secret management | OIDC (no secrets) + Key Vault | Runtime |
-| Network isolation | K8s Network Policies + NSGs | Runtime |
-| Pod security | Non-root (UID 1001), port 8080 | Runtime |
+| Secret management | OIDC (no secrets) + Key Vault Private Endpoint | Runtime |
+| Registry isolation | ACR Private Endpoint — public access disabled | Runtime |
+| Vault isolation | Key Vault Private Endpoint — public access disabled | Runtime |
+| Network isolation | K8s Network Policies + NSGs + AFD service tag | Runtime |
+| Pod security | Non-root (UID 10001), seccompProfile=RuntimeDefault | Runtime |
 | Availability | PDB minAvailable=2 (prod) | Runtime |
 
 ---
 
 ## Monitoring & Observability
 
-Monitoring is deployed via Helm (`kube-prometheus-stack`) into the `monitoring` namespace.
+Monitoring is deployed via Helm (`kube-prometheus-stack`) into the `monitoring` namespace on the **App Node Pool** (no `CriticalAddonsOnly` toleration required).
 
 **Components included:**
-- **Prometheus** — metrics collection, 15s scrape interval, 15-day retention
-- **Grafana** — dashboards (LoadBalancer service, port 80)
-- **Alertmanager** — alert routing (configurable: Slack/email/PagerDuty)
+- **Prometheus** — metrics collection, 15s scrape interval, 15-day retention, scrapes across all namespaces
+- **Grafana** — dashboards (LoadBalancer service — ops access only, not through public ingress)
+- **Alertmanager** — alert routing (Slack / email)
 - **kube-state-metrics** — deployment/pod/node state metrics
 - **node-exporter** — per-node CPU/memory/disk/network
+- **cAdvisor** — container resource usage
 
 **Custom Netflix Dashboard (auto-provisioned):**
 - Pod CPU and memory usage
@@ -333,11 +396,6 @@ Monitoring is deployed via Helm (`kube-prometheus-stack`) into the `monitoring` 
 - Network I/O (RX/TX per pod)
 - HPA current vs desired replicas
 
-**Deploy monitoring:**
-```
-GitHub → Actions → Deploy Monitoring Stack → environment: dev|prod
-```
-
 **Access Grafana:**
 ```bash
 kubectl get svc kube-prometheus-stack-grafana -n monitoring
@@ -345,15 +403,108 @@ kubectl get svc kube-prometheus-stack-grafana -n monitoring
 # Navigate to: Dashboards → Netflix Streaming App
 ```
 
+---
+
+## Getting Started
+
+### Prerequisites
+
+```bash
+node --version    # 18+
+python --version  # 3.10+
+docker version
+az version        # Azure CLI 2.50+
+terraform version # 1.5+
+kubectl version --client
+helm version      # 3.12+
+gh version        # GitHub CLI 2.30+
+```
+
+### Local Development
+
+**Frontend:**
+```bash
+cd app
+cp .env.example .env      # add VITE_APP_TMDB_V3_API_KEY=<your_key>
+npm install
+npm run dev               # → http://localhost:5173
+```
+
+**Backend API:**
+```bash
+cd app
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload  # → http://localhost:8000
+```
+
+**Docker (both services):**
+```bash
+cd app
+docker build -f Dockerfile.frontend \
+  --build-arg VITE_APP_TMDB_V3_API_KEY=<key> \
+  -t netflix-app:local .
+docker run -p 8080:8080 netflix-app:local
+
+docker build -f Dockerfile -t netflix-api:local .
+docker run -p 8000:80 netflix-api:local
+```
+
+### Full Deployment (summary)
+
+```bash
+# 1. Bootstrap Azure state storage (one-time)
+source scripts/setup-env.sh dev --setup-backend
+source scripts/setup-env.sh prod --setup-backend
+
+# 2. Configure OIDC (one-time)
+bash scripts/setup-oidc.sh --repo <owner/repo> --set-secrets
+
+# 3. Add remaining GitHub secrets manually (TMDB_API_KEY, GRAFANA_ADMIN_PASSWORD, etc.)
+#    See .github/SECRETS_REQUIRED.md
+
+# 4. Create GitHub environments: dev (no gates) + production (reviewer required)
+
+# 5. Provision infrastructure (prod: includes Front Door, private endpoints)
+cd environment/dev && terraform init && terraform apply
+cd environment/prod && terraform init && terraform apply
+
+# 6. Install Argo Rollouts controller (prod cluster, one-time)
+kubectl create namespace argo-rollouts
+kubectl apply -n argo-rollouts \
+  -f https://github.com/argoproj/argo-rollouts/releases/latest/download/install.yaml
+
+# 7. Push to main → deploy-dev.yml triggers automatically
+
+# 8. Deploy monitoring
+#    GitHub → Actions → Deploy Monitoring Stack → dev
+
+# 9. Configure DNS (after terraform apply outputs Front Door endpoint hostname)
+#    adedayo.shop     → CNAME → <frontdoor_endpoint_hostname>
+#    www.adedayo.shop → CNAME → <frontdoor_endpoint_hostname>
+#    _dnsauth.adedayo.shop     → TXT → <apex_domain_validation_token>
+#    _dnsauth.www.adedayo.shop → TXT → <www_domain_validation_token>
+
+# 10. Promote to prod
+#     GitHub → Actions → Deploy to Production → image_tag=<sha7> + confirm_deploy=deploy-prod
+
+# 11. After smoke test passes, promote the Blue/Green rollout
+kubectl argo rollouts promote netflix-web -n netflix-prod
+kubectl argo rollouts promote netflix-api -n netflix-prod
+```
 
 
-
+---
 
 ## Screenshots
 
-> Add screenshots of the running application, Grafana dashboards, and GitHub Actions runs here.
 
----
+<img width="797" height="434" alt="image" src="https://github.com/user-attachments/assets/05deef44-56ca-4921-9b90-49ba16280824" />
+
+
+<img width="814" height="454" alt="image" src="https://github.com/user-attachments/assets/5a145c84-0955-4f15-a831-fa84cdcc3584" />
+
+
 
 ## License
 
