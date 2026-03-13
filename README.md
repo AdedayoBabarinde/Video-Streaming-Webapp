@@ -493,6 +493,18 @@ kubectl argo rollouts promote netflix-web -n netflix-prod
 kubectl argo rollouts promote netflix-api -n netflix-prod
 ```
 
+**For full step-by-step instructions, see [docs/BUILD_GUIDE.md](docs/BUILD_GUIDE.md).**
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [docs/BUILD_GUIDE.md](docs/BUILD_GUIDE.md) | Complete build guide: prerequisites → local dev → Azure bootstrap → OIDC → Terraform → CI/CD → Argo Rollouts → DNS/TLS → teardown → troubleshooting |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Detailed architecture diagrams: system overview, VNet topology, CI/CD pipeline, K8s cluster layout, OIDC chain, data flow, secret management, monitoring flow, Terraform dependency graph |
+| [docs/architecture.drawio](docs/architecture.drawio) | draw.io production architecture diagram (AFD, WAF, private endpoints, Argo Rollouts Blue/Green) |
+| [.github/SECRETS_REQUIRED.md](.github/SECRETS_REQUIRED.md) | All required GitHub secrets with descriptions and OIDC setup instructions |
 
 ---
 
