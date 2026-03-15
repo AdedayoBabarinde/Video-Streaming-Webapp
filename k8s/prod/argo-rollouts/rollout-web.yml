@@ -1,0 +1,105 @@
+# ============================================================
+# Argo Rollouts — Blue/Green for netflix-web (prod)
+#
+# Replaces k8s/prod/deployment.yml for the web workload.
+# Install the controller first:
+#   kubectl create namespace argo-rollouts
+#   kubectl apply -n argo-rollouts \
+#     -f https://github.com/argoproj/argo-rollouts/releases/latest/download/install.yaml
+#
+# Promote a new version (after CI pushes a new image tag):
+#   kubectl argo rollouts promote netflix-web -n netflix-prod
+# ============================================================
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: netflix-web
+  namespace: netflix-prod
+  labels:
+    app: netflix-web
+    environment: prod
+  annotations:
+    checkov.io/skip1: "CKV_K8S_43=Image digest pinning not used; tags rotated by CI/CD pipeline"
+    checkov.io/skip2: "CKV_K8S_22=Nginx requires write access to temp dirs; readOnlyRootFilesystem disabled"
+spec:
+  replicas: 3
+  revisionHistoryLimit: 3
+  progressDeadlineSeconds: 900
+  selector:
+    matchLabels:
+      app: netflix-web
+
+  strategy:
+    blueGreen:
+      # Active service receives all production traffic
+      activeService: netflix-web-active
+      # Preview service receives the new (green) version before promotion
+      previewService: netflix-web-preview
+      # Require manual promotion: kubectl argo rollouts promote netflix-web -n netflix-prod
+      autoPromotionEnabled: false
+      # Scale down the old (blue) version 60 s after promotion completes
+      scaleDownDelaySeconds: 60
+      # Keep the preview stack alive for inspection before promotion
+      previewReplicaCount: 2
+
+  template:
+    metadata:
+      labels:
+        app: netflix-web
+        environment: prod
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          nodeTaintsPolicy: Honor
+          labelSelector:
+            matchLabels:
+              app: netflix-web
+      containers:
+        - name: netflix-web
+          image: __ACR_LOGIN_SERVER__/netflix-app:__IMAGE_TAG__
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: netflix-app-config
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            runAsUser: 10001
+            capabilities:
+              drop:
+                - ALL
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3

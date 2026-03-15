@@ -1,0 +1,91 @@
+# ============================================================
+# Argo Rollouts — Blue/Green for netflix-api (prod)
+# ============================================================
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: netflix-api
+  namespace: netflix-prod
+  labels:
+    app: netflix-api
+    environment: prod
+  annotations:
+    checkov.io/skip1: "CKV_K8S_43=Image digest pinning not used; tags rotated by CI/CD pipeline"
+    checkov.io/skip2: "CKV_K8S_35=Secrets injected via secretRef; CSI volume migration is a future improvement"
+    checkov.io/skip3: "CKV_K8S_22=SentenceTransformer writes model cache to disk; readOnlyRootFilesystem cannot be enabled"
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  progressDeadlineSeconds: 900
+  selector:
+    matchLabels:
+      app: netflix-api
+
+  strategy:
+    blueGreen:
+      activeService: netflix-api-active
+      previewService: netflix-api-preview
+      autoPromotionEnabled: false
+      scaleDownDelaySeconds: 60
+      previewReplicaCount: 1
+
+  template:
+    metadata:
+      labels:
+        app: netflix-api
+        environment: prod
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: netflix-api
+          image: __ACR_LOGIN_SERVER__/netflix-api:__IMAGE_TAG__
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: netflix-app-secrets
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "1Gi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            runAsUser: 10001
+            capabilities:
+              drop:
+                - ALL
+          startupProbe:
+            httpGet:
+              path: /
+              port: 8080
+            failureThreshold: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3

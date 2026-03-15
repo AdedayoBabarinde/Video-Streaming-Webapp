@@ -1,0 +1,87 @@
+# ============================================================
+# Argo Rollouts — Blue/Green Services (prod)
+#
+# Each workload needs TWO ClusterIP services:
+#   active  → receives real production traffic via ingress
+#   preview → receives green-version traffic for smoke-testing
+#             before promotion is approved
+#
+# The Rollout controller automatically patches the pod
+# selector on these services during each rollout lifecycle.
+# ============================================================
+
+# ── netflix-web active (production) ──────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: netflix-web-active
+  namespace: netflix-prod
+  labels:
+    app: netflix-web
+    role: active
+spec:
+  selector:
+    app: netflix-web
+  type: ClusterIP
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8080
+---
+# ── netflix-web preview (pre-promotion smoke test) ───────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: netflix-web-preview
+  namespace: netflix-prod
+  labels:
+    app: netflix-web
+    role: preview
+spec:
+  selector:
+    app: netflix-web
+  type: ClusterIP
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8080
+---
+# ── netflix-api active ───────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: netflix-api-active
+  namespace: netflix-prod
+  labels:
+    app: netflix-api
+    role: active
+spec:
+  selector:
+    app: netflix-api
+  type: ClusterIP
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8080
+---
+# ── netflix-api preview ──────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: netflix-api-preview
+  namespace: netflix-prod
+  labels:
+    app: netflix-api
+    role: preview
+spec:
+  selector:
+    app: netflix-api
+  type: ClusterIP
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8080
